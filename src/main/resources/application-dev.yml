@@ -1,0 +1,7 @@
+# 開發用設定：以 --spring.profiles.active=dev 啟動。正式環境不可啟用。
+spring:
+  h2:
+    console:
+      # http://localhost:8080/h2-console，JDBC URL 填 jdbc:h2:mem:tokenservice、帳號 sa、密碼留空
+      # 不設定 settings.web-allow-others，維持 H2 預設 false：只接受本機連線
+      enabled: true

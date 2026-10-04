@@ -4,6 +4,9 @@ target/
 # RSA 私鑰 / 公鑰，絕不可提交
 keys/
 
+# H2 檔案模式的資料庫檔
+data/
+
 # IDE
 .idea/
 *.iml

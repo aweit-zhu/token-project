@@ -14,17 +14,42 @@ import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 class TokenIssuanceTest extends IntegrationTestSupport {
 
+    /** 修改資料的測試只動這個專屬帳號，不改動 alice / admin。 */
+    private static final String TEST_USER = "issuance-test-user";
+
     @Autowired
     MockMvc mvc;
+
+    @Autowired
+    JdbcTemplate jdbc;
+
+    @AfterEach
+    void deleteTestUser() {
+        jdbc.update("DELETE FROM users WHERE username = ?", TEST_USER);
+    }
+
+    private void insertTestUser(boolean enabled, String... roles) {
+        jdbc.update("INSERT INTO users (username, password, enabled) VALUES (?, '{noop}test123', ?)", TEST_USER, enabled);
+        for (String role : roles) {
+            assignTestUserRole(role);
+        }
+    }
+
+    private void assignTestUserRole(String role) {
+        jdbc.update("INSERT INTO user_roles (user_id, role_id) "
+                + "SELECT u.id, r.id FROM users u, roles r WHERE u.username = ? AND r.name = ?", TEST_USER, role);
+    }
 
     private ResultActions requestToken(String json) throws Exception {
         return mvc.perform(post("/auth/token").contentType(MediaType.APPLICATION_JSON).content(json));
@@ -99,5 +124,38 @@ class TokenIssuanceTest extends IntegrationTestSupport {
         String second = SignedJWT.parse(issueToken("alice", "alice123")).getJWTClaimsSet().getJWTID();
 
         assertThat(first).isNotEqualTo(second);
+    }
+
+    @Test
+    void disabledUserGetsSameUnauthorizedResponseAsWrongPassword() throws Exception {
+        insertTestUser(false, "USER");
+
+        String disabled = requestToken("{\"username\":\"" + TEST_USER + "\",\"password\":\"test123\"}")
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.access_token").doesNotExist())
+                .andReturn().getResponse().getContentAsString();
+        String wrongPassword = requestToken("{\"username\":\"alice\",\"password\":\"nope\"}")
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(disabled).isEqualTo(wrongPassword);
+    }
+
+    @Test
+    void usernameIsCaseInsensitiveAndSubjectIsStoredName() throws Exception {
+        JWTClaimsSet claims = SignedJWT.parse(issueToken("ALICE", "alice123")).getJWTClaimsSet();
+
+        assertThat(claims.getSubject()).isEqualTo("alice");
+    }
+
+    @Test
+    void roleChangesAreReflectedInNewTokens() throws Exception {
+        insertTestUser(true, "USER");
+        assertThat(SignedJWT.parse(issueToken(TEST_USER, "test123")).getJWTClaimsSet().getStringListClaim("roles"))
+                .containsExactly("USER");
+
+        assignTestUserRole("ADMIN");
+
+        assertThat(SignedJWT.parse(issueToken(TEST_USER, "test123")).getJWTClaimsSet().getStringListClaim("roles"))
+                .containsExactly("ADMIN", "USER");
     }
 }

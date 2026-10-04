@@ -40,9 +40,55 @@ mvn verify
 | `app.jwt.issuer` | `http://localhost:8080` | token 的 `iss`，驗證時也會比對 |
 | `app.jwt.ttl` | `15m` | token 有效期 |
 | `app.jwks.cache-max-age` | `300s` | JWKS 回應的 `Cache-Control: max-age` |
-| `app.users[]` | `alice`、`admin` | 示範帳號（`username`、`password`、`roles`） |
+| `spring.datasource.url` | `jdbc:h2:mem:tokenservice;DB_CLOSE_DELAY=-1` | 使用者資料庫（H2，預設記憶體模式） |
 
-示範帳號：`alice` / `alice123`（角色 `USER`）、`admin` / `admin123`（角色 `USER`、`ADMIN`）。密碼以 `{bcrypt}` 雜湊儲存；開發時也可用 `{noop}明碼`。
+### 使用者資料庫
+
+帳號與角色存放在 H2 資料庫，以 MyBatis 存取（SQL 在 `src/main/resources/mapper/UserMapper.xml`）。每次啟動會執行 `schema.sql` 建表、`data.sql` 植入示範帳號；兩支腳本都可重複執行，只補缺少的資料、不覆蓋既有資料。
+
+| 資料表 | 欄位 | 說明 |
+| --- | --- | --- |
+| `users` | `id`、`username`、`password`、`enabled` | `username` 唯一且必須小寫（登入時不分大小寫）；`password` 為帶前綴的雜湊，例如 `{bcrypt}...`；`enabled = FALSE` 的帳號無法取得 token |
+| `roles` | `id`、`name` | `name` 唯一，不含 `ROLE_` 前綴，例如 `USER`、`ADMIN` |
+| `user_roles` | `user_id`、`role_id` | 多對多關聯，複合主鍵；刪除使用者或角色時一併刪除 |
+
+示範帳號：`alice` / `alice123`（角色 `USER`）、`admin` / `admin123`（角色 `USER`、`ADMIN`）。
+
+預設為記憶體模式，重啟後資料即重建。要保留資料，改用檔案模式（`data/` 已列入 `.gitignore`）：
+
+```yaml
+spring:
+  datasource:
+    url: jdbc:h2:file:./data/tokenservice
+```
+
+新增帳號、指派角色與停用帳號的 SQL 範例（密碼雜湊可用 `new BCryptPasswordEncoder().encode(...)` 產生；開發時也可用 `{noop}明碼`）：
+
+```sql
+INSERT INTO users (username, password) VALUES ('carol', '{bcrypt}$2a$10$...');
+
+INSERT INTO user_roles (user_id, role_id)
+SELECT u.id, r.id FROM users u, roles r WHERE u.username = 'carol' AND r.name = 'USER';
+
+UPDATE users SET enabled = FALSE WHERE username = 'carol';
+```
+
+角色變更在下一次取得 token 時生效；已簽發的 token 在過期前仍帶舊角色。
+
+### H2 Console（僅開發用）
+
+以 `dev` profile 啟動即可在瀏覽器開啟 `http://localhost:8080/h2-console` 直接查詢或修改資料表：
+
+```bash
+mvn spring-boot:run -Dspring-boot.run.profiles=dev
+# 或
+java -jar target/token-service-0.0.1-SNAPSHOT.jar --spring.profiles.active=dev
+```
+
+登入畫面填入 JDBC URL `jdbc:h2:mem:tokenservice`、User Name `sa`、Password 留空（改用檔案模式時填對應的 URL）。
+
+- 不需要 Bearer token；Console 只接受本機連線，從其他機器開啟會看到 `remote connections ('webAllowOthers') are disabled`。
+- 未啟用 `dev` profile 時不提供 Console，`/h2-console` 回 `401`。
 
 ### 金鑰檔規則
 
@@ -137,5 +183,6 @@ spring:
 - **私鑰保管**：私鑰以明文 PEM 存放於磁碟，`keys/` 已列入 `.gitignore`，絕不可提交。正式環境應改由 KMS、Vault 或容器 secret 掛載提供，並限制檔案權限（Windows 上服務無法自動設定，請自行調整 ACL）。
 - **多實例部署**：各實例若各自自動產生金鑰，簽出的 token 將無法互相驗證。請預先產生一組金鑰並讓所有實例共用。
 - **換鑰**：目前只支援單一金鑰。刪除 `keys/` 後重啟即會換鑰，但所有已簽發的 token 會立即失效；下游服務最多在 `cache-max-age` 後才會取得新公鑰。
-- **示範帳號**：`app.users` 僅供展示，正式環境請改接真正的使用者儲存。
+- **使用者資料庫**：`data.sql` 的示範帳號僅供展示，正式環境請移除並改用正式資料庫（H2 記憶體模式重啟即遺失資料；換資料庫時需改寫 H2 方言的 SQL 腳本）。
+- **H2 Console**：正式環境不可啟用 `dev` profile，Console 可直接讀寫帳號、密碼雜湊與停用狀態。
 - **HTTPS**：本服務不處理 TLS，請置於 HTTPS 反向代理之後。

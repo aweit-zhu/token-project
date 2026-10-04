@@ -1,6 +1,20 @@
 spring:
   application:
     name: token-service
+  datasource:
+    # 預設 H2 記憶體模式；要保留資料可改為 jdbc:h2:file:./data/tokenservice
+    url: jdbc:h2:mem:tokenservice;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""
+  sql:
+    init:
+      # 每次啟動執行 schema.sql / data.sql（兩者皆可重複執行）
+      mode: always
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
 
 server:
   port: 8080
@@ -16,11 +30,3 @@ app:
     ttl: 15m
   jwks:
     cache-max-age: 300s
-  # 示範帳號，僅供開發 / 展示使用。密碼：alice / alice123、admin / admin123
-  users:
-    - username: alice
-      password: "{bcrypt}$2a$10$oasznHzWWSPd2SELS3MWG.a1CXFTjICJedCkePx.fmZ2U8tiFvoTG"
-      roles: [USER]
-    - username: admin
-      password: "{bcrypt}$2a$10$2Knp5uIZKTjBRBaQbXOwquUSfAsWBXZOQg4HxJiMYO8hBQwidwCaq"
-      roles: [USER, ADMIN]

@@ -1,10 +1,6 @@
-# token-issuance Specification
+# Spec Delta
 
-## Purpose
-
-驗證設定檔中示範帳號的身分後，以 RSA 私鑰 RS256 簽發 JWT access token，供用戶端呼叫受保護的 API。
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: 以帳號密碼簽發 token
 系統 SHALL 在 `POST /auth/token` 接受 JSON 主體 `{"username","password"}`，帳密與使用者資料庫中某個啟用的使用者相符時回傳 HTTP 200 與 `{"access_token","token_type":"Bearer","expires_in"}`。
@@ -27,20 +23,6 @@
 #### Scenario: 帳號已停用
 - **WHEN** 用戶端以資料庫中已停用（`enabled` 為 false）使用者的正確帳密呼叫 `POST /auth/token`
 - **THEN** 回應狀態為 401，不簽發 token，且錯誤訊息與密碼錯誤時相同
-
-### Requirement: 驗證請求格式
-`username` 或 `password` 缺少或為空字串時，系統 MUST 回傳 HTTP 400。
-
-#### Scenario: 缺少密碼
-- **WHEN** 用戶端呼叫 `POST /auth/token` 但主體沒有 `password`
-- **THEN** 回應狀態為 400
-
-### Requirement: Token 以 RS256 簽署並帶 kid
-簽發的 token SHALL 為 JWS Compact 格式，header 的 `alg` 為 `RS256`、`typ` 為 `JWT`、`kid` 等於 JWKS 中目前金鑰的 `kid`。
-
-#### Scenario: 以 JWKS 公鑰驗證簽章
-- **WHEN** 取得一個新簽發的 token，並以 `GET /.well-known/jwks.json` 中相同 `kid` 的公鑰驗證
-- **THEN** 簽章驗證成功
 
 ### Requirement: Token claims 內容
 Token SHALL 包含 `iss`（設定的 issuer）、`sub`（使用者名稱）、`iat`、`exp`（`iat` 加設定的有效期，預設 15 分鐘）、`jti`（每次簽發唯一），以及 `roles`（使用者資料庫中該使用者被指派的角色清單）。
