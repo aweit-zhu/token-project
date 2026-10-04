@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: token-service
+
+server:
+  port: 8080
+
+app:
+  keys:
+    # PEM 格式：私鑰為 PKCS#8（BEGIN PRIVATE KEY），公鑰為 X.509（BEGIN PUBLIC KEY）。
+    # 兩檔皆不存在時，啟動會自動產生 2048-bit 金鑰對並寫入此處。
+    private-key-path: ./keys/private.pem
+    public-key-path: ./keys/public.pem
+  jwt:
+    issuer: http://localhost:8080
+    ttl: 15m
+  jwks:
+    cache-max-age: 300s
+  # 示範帳號，僅供開發 / 展示使用。密碼：alice / alice123、admin / admin123
+  users:
+    - username: alice
+      password: "{bcrypt}$2a$10$oasznHzWWSPd2SELS3MWG.a1CXFTjICJedCkePx.fmZ2U8tiFvoTG"
+      roles: [USER]
+    - username: admin
+      password: "{bcrypt}$2a$10$2Knp5uIZKTjBRBaQbXOwquUSfAsWBXZOQg4HxJiMYO8hBQwidwCaq"
+      roles: [USER, ADMIN]

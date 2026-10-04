@@ -1,0 +1,13 @@
+# Build
+target/
+
+# RSA 私鑰 / 公鑰，絕不可提交
+keys/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
